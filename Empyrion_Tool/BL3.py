@@ -43,4 +43,5 @@ guide = [
     [ZANE, FL4K], # Row 12 (top)
 ]
 
-grid, guide
+if __name__ == "__main__":
+    grid, guide
