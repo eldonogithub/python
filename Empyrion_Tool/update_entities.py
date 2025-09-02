@@ -78,5 +78,6 @@ def update_entities(database):
         conn.close()
 
 # Example usage:
-database_file = r"C:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival\Saves\Games\Creative\global.db"
-update_entities(database_file)
+if __name__ == "__main__":
+    database_file = r"C:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival\Saves\Games\Creative\global.db"
+    update_entities(database_file)
