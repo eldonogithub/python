@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from empyrion_common import etype_to_abbr, etype_abbr_to_id
 import glob
 import argparse
 import re
@@ -20,38 +21,6 @@ class CustomParser(argparse.ArgumentParser):
         return super().format_usage().replace('usage:', 'Usage:', 1)
     def format_help(self):
         return super().format_help().replace('usage:', 'Usage:', 1)
-
-parser = CustomParser(
-    usage="%(prog)s [OPTION]...",
-    description=(
-        "Search Empyrion save databases for entities, structures, and blueprints.\n"
-        "Optionally filter by playfield (planet/sector) or game name.\n"
-        "Use --help for the full manual."
-    ),
-    formatter_class=argparse.RawDescriptionHelpFormatter,
-    add_help=True
-)
-parser.add_argument("--id", type=int, help="Entity ID to search for")
-parser.add_argument("--name", type=str, help="Partial entity NAME to search for (case-insensitive)")
-parser.add_argument("--list", action="store_true", help="List all structures")
-parser.add_argument("--location", type=str, help="Filter results to a specific playfield (planet/sector) NAME")
-parser.add_argument("--saves", type=str, default=r"C:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival\Saves\Games", help="Root SAVES directory")
-parser.add_argument("--games", type=str, help="Search only saves for games containing this name (substring match)")
-parser.add_argument("--game", type=str, help="Search only saves for the game with this exact name (subdirectory of saves directory)")
-parser.add_argument("--prefabs", type=str, default=r"C:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival\Content\Prefabs", help="Directory containing blueprint .epb files")
-parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
-parser.add_argument("--man", action="store_true", help="Show full manual page and exit")
-parser.add_argument("--type", type=str, help="Filter by structure type: BA, CV, SV, HV, AST")
-parser.add_argument("--owner", type=str, help="Find all structures owned by the given entity NAME (resolved to entityid per database)")
-
-prog_name = os.path.basename(sys.argv[0])
-
-def print_usage_error(message):
-    print(f"{prog_name}: {message}")
-    print()
-    parser.print_usage()
-    print(f"Try '{prog_name} --help' for more information.")
-    sys.exit(1)
 
 def is_main_save_dir(dirname):
     """
@@ -89,17 +58,17 @@ def etype_to_str(etype):
     """
     Translate etype integer to a human-readable string and game abbreviation.
     """
-    mapping = {
-        1: ("Player", "PLAYER"),
-        2: ("Base", "BA"),
-        3: ("Capital Vessel", "CV"),
-        4: ("Small Vessel", "SV"),
-        5: ("Hover Vessel", "HV"),      # Updated: Hover Vehicle -> Hover Vessel
-        6: ("Drone", "DRONE"),          # Added: Drone type if present
-        7: ("Asteroid", "AST"),
-        8: ("Unknown", "UNKNOWN")       # Added: fallback for unknown types
+    name_map = {
+        1: "Player",
+        2: "Base",
+        3: "Capital Vessel",
+        4: "Small Vessel",
+        5: "Hover Vessel",
+        6: "Drone",
+        7: "Asteroid",
+        8: "Unknown"
     }
-    return mapping.get(etype, (str(etype), str(etype)))
+    return name_map.get(etype, str(etype)), etype_to_abbr(etype)
 
 def etype_abbr_to_id(abbr):
     """
@@ -238,7 +207,11 @@ def search_entities(args):
                     sys.exit(1)
 
             # Always filter out removed entities
-            where_clauses.append("e.isremoved = 0")
+            # Filter by removed status
+            if args.removed:
+                where_clauses.append("e.isremoved = 1")
+            else:
+                where_clauses.append("e.isremoved = 0")
             where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
 
             try:
@@ -333,7 +306,40 @@ def search_entities(args):
     if not all_results:
         print("No matches found.")
 
-if __name__ == "__main__":
+def main():
+    parser = CustomParser(
+        usage="%(prog)s [OPTION]...",
+        description=(
+            "Search Empyrion save databases for entities, structures, and blueprints.\n"
+            "Optionally filter by playfield (planet/sector) or game name.\n"
+            "Use --help for the full manual."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=True
+    )
+    parser.add_argument("--id", type=int, help="Entity ID to search for")
+    parser.add_argument("--name", type=str, help="Partial entity NAME to search for (case-insensitive)")
+    parser.add_argument("--list", action="store_true", help="List all structures")
+    parser.add_argument("--location", type=str, help="Filter results to a specific playfield (planet/sector) NAME")
+    parser.add_argument("--saves", type=str, default=r"C:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival\Saves\Games", help="Root SAVES directory")
+    parser.add_argument("--games", type=str, help="Search only saves for games containing this name (substring match)")
+    parser.add_argument("--game", type=str, help="Search only saves for the game with this exact name (subdirectory of saves directory)")
+    parser.add_argument("--prefabs", type=str, default=r"C:\SteamLibrary\steamapps\common\Empyrion - Galactic Survival\Content\Prefabs", help="Directory containing blueprint .epb files")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--man", action="store_true", help="Show full manual page and exit")
+    parser.add_argument("--type", type=str, help="Filter by structure type: BA, CV, SV, HV, AST")
+    parser.add_argument("--owner", type=str, help="Find all structures owned by the given entity NAME (resolved to entityid per database)")
+    parser.add_argument("--removed", action="store_true", help="Show only removed structures/entities (isremoved=1)")
+
+    prog_name = os.path.basename(sys.argv[0])
+
+    def print_usage_error(message):
+        print(f"{prog_name}: {message}")
+        print()
+        parser.print_usage()
+        print(f"Try '{prog_name} --help' for more information.")
+        sys.exit(1)
+
     args = parser.parse_args()
 
     if args.man:
@@ -410,3 +416,6 @@ EXAMPLES
         sys.exit(0)
 
     search_entities(args)
+
+if __name__ == "__main__":
+    main()
